@@ -18,7 +18,7 @@ public final class SwerveConstants {
         public static final boolean invertGyro = true; // Always ensure Gyro is CCW+ CW-
 
         public static final COTSFalconSwerveConstants chosenModule =  //TODO: This must be tuned to specific robot
-            COTSFalconSwerveConstants.SDSMK4i(COTSFalconSwerveConstants.driveGearRatios.SDSMK4i_L2);
+            COTSFalconSwerveConstants.SDSMK3(COTSFalconSwerveConstants.driveGearRatios.SDSMK3_Standard);
 
         /* Drivetrain Constants */
         public static final double trackWidth = 1;//Units.inchesToMeters(21.73); //TODO: This must be tuned to specific robot - I believe its 1
