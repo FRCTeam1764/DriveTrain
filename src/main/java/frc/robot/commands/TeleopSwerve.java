@@ -68,12 +68,6 @@ public double square(double num){
     
     public void execute() {
         /* Get Values, Deadband*/
-
-        
-
-
-
-
         double translationVal = MathUtil.applyDeadband(getTranslation(), SwerveConstants.stickDeadband);
         double rotationVal = MathUtil.applyDeadband(square(rotationSup.getAsDouble()), SwerveConstants.stickDeadband);
         // double strafeVal = MathUtil.applyDeadband(strafeSup.getAsDouble()*.75, SwerveConstants.stickDeadband);

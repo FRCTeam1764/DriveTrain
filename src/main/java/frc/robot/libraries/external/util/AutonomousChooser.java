@@ -16,6 +16,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj2.command.Command;
 import edu.wpi.first.wpilibj2.command.InstantCommand;
 import edu.wpi.first.wpilibj2.command.PrintCommand;
+import edu.wpi.first.wpilibj2.command.SwerveControllerCommand;
 import frc.robot.commands.*;
 import frc.robot.libraries.external.control.Trajectory;
 
@@ -68,9 +69,11 @@ return new InstantCommand();
 
     private Command getAUTOBALANCELEFTAutoCommand(RobotContainer robotContainer) {
         List<PathPlannerTrajectory> pathGroup = PathPlanner.loadPathGroup("OnePieceLeft", new PathConstraints(4, 3));
+       
+    eventMap.put("Spawn", new InstantCommand());
+
+
         Command fullAuto = autoBuilder.fullAuto(pathGroup);
-
-
         return fullAuto; //FollowTrajectoryCommand(robotContainer.getDrivetrainSubsystem(), trajectories[0]);
     }
 
