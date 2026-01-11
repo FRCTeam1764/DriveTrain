@@ -17,18 +17,23 @@ public class Blinkin extends SubsystemBase {
   //.87 - blue 
   //-.09
 
-  Spark blinkin  = new Spark(Constants.BLINKIN_SPARKPORT);
+  //Spark blinkin  = new Spark(Constants.BLINKIN_SPARKPORT);
   public Blinkin() {
     color = -0.41;
   }
 
   public void setColor(double color){
-this.color = color;
+    this.color = color;
+  }
+
+
+  public void setBlinkin(){
+    //blinkin.set(color);
   }
 
   @Override
   public void periodic() {
-    blinkin.set(color);
+  //  blinkin.set(color);
     // This method will be called once per scheduler run
   }
 }

@@ -8,7 +8,7 @@ import frc.robot.constants.CommandConstants;
 
 /** Add your docs here. */
 public class IntakeState {
-    double desired =CommandConstants.INTAKE_UP_ENCODERVALUE;
+    double desired = 0; //commandconstants
     
 public void setEncoderValue(double value) {
     desired = value;

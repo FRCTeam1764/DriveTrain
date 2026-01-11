@@ -1,42 +1,25 @@
 package frc.robot.subsystems;
 
-import edu.wpi.first.math.VecBuilder;
-import edu.wpi.first.math.geometry.Pose2d;
-import edu.wpi.first.math.geometry.Translation2d;
-import edu.wpi.first.math.geometry.Translation3d;
+
+import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.geometry.Transform2d;
 import edu.wpi.first.math.util.Units;
-import edu.wpi.first.networktables.NetworkTable;
-import edu.wpi.first.networktables.NetworkTableEntry;
-import edu.wpi.first.networktables.NetworkTableInstance;
-import edu.wpi.first.wpilibj.DriverStation.Alliance;
-import edu.wpi.first.wpilibj.Timer;
+import edu.wpi.first.util.datalog.DataLog;
+import edu.wpi.first.util.datalog.DoubleLogEntry;
+import edu.wpi.first.wpilibj.DataLogManager;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
-import frc.robot.LimelightHelpers;
-import frc.robot.RobotContainer;
-import frc.robot.constants.Constants;
-//import webblib.util.RectanglePoseArea;
+import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine;
+import frc.robot.libraries.internal.LimelightHelpers;
+import frc.robot.libraries.internal.LimelightHelpers.PoseEstimate;
+import frc.robot.libraries.internal.LimelightHelpers.RawFiducial;
 
 public class LimelightSubsystem extends SubsystemBase {
   /** Creates a new LimeLight. */
-  // public static final RectanglePoseArea field =
-  // new RectanglePoseArea(new Translation2d(0.0, 0.0), new Translation2d(16.54, 8.02));
-  private NetworkTable table;
-  private NetworkTableEntry tx;
-  private NetworkTableEntry ty;
-  private NetworkTableEntry ta;
-  private NetworkTableEntry tv;
-  private NetworkTableEntry tid;
-  private double horizontal_offset = 0;
-  private String name;
-  private Pose2d botpose;
-  private SwerveSubsystem driveTrain;
-  boolean trust = false;
 
+  private String Limelight;
 
-
-
-  public LimelightSubsystem(String name,SwerveSubsystem swerve) {
+  public LimelightSubsystem(String LimelightName) {
     /**
      * tx - Horizontal Offset
      * ty - Vertical Offset 
@@ -44,107 +27,86 @@ public class LimelightSubsystem extends SubsystemBase {
      * tv - Target Visible
      */
 
-    this.table = NetworkTableInstance.getDefault().getTable(name);
-    this.tx = table.getEntry("tx");
-    this.ty = table.getEntry("ty");
-    this.ta = table.getEntry("ta");
-    this.tv = table.getEntry("tv");
-        this.tid = table.getEntry("tid");
-
-this.name = name;
-this.driveTrain = swerve;
+    Limelight = LimelightName;
   }
 
-  public LimelightSubsystem(String name,double offset,SwerveSubsystem drivetrain) {
-    /**
-     * tx - Horizontal Offset
-     * ty - Vertical Offset 
-     * ta - Area of target 
-     * tv - Target Visible
-     */
-
-    this.table = NetworkTableInstance.getDefault().getTable(name);
-    this.tx = table.getEntry("tx");
-    this.ty = table.getEntry("ty");
-    this.ta = table.getEntry("ta");
-    this.tv = table.getEntry("tv");
-    this.tid = table.getEntry("tid");
-    this.horizontal_offset = offset;
-    this.name = name;
-    this.driveTrain = drivetrain;
-  }
   @Override
   public void periodic() {
     // This method will be called once per scheduler run
-
-    
-//TODO: test or somtehin, ya 
-/* 
-      Double targetDistance = LimelightHelpers.getTargetPose3d_CameraSpace(name).getTranslation().getDistance(new Translation3d());
-      // Tune this for your robot around how much variance you see in the pose at a given distance
-    //  Double confidence = 1 - ((targetDistance - 1) / 6);
-      LimelightHelpers.Results result =
-          LimelightHelpers.getLatestResults(name).targetingResults;
-      if (result.valid) {
-        botpose = LimelightHelpers.getBotPose2d_wpiBlue(name);
-          if (driveTrain.getPose().getTranslation().getDistance(botpose.getTranslation()) < 0.5
-              || trust
-              || result.targets_Fiducials.length > 1) {
-             driveTrain.addVisionMeasurement(
-                botpose,
-                Timer.getFPGATimestamp()
-                    - (result.latency_capture / 1000.0)
-                    - (result.latency_pipeline / 1000.0)
-             );
-          }
-          
-        }
-        */
-      
+    updatePoseEstimation();
+    //SmartDashboard.putNumber("newID", getTargetAprilTagID());
   }
 
   public double getHorizontalAngleOfErrorDegrees(){
-    return getTx().getDouble(0.0) +horizontal_offset;
-
+    return getTx();
   }
 
   public double getVerticalAngleOfErrorDegrees(){
-    return getTy().getDouble(0.0) +0;
+    return getTy() +0;
   }
 
 
- public NetworkTableEntry getTx() {
-    return tx;
+  public double getTx() {
+    return LimelightHelpers.getTX(Limelight);
   }
 
-  public NetworkTableEntry getTy() {
-    return ty;
+  public double getTy() {
+    return LimelightHelpers.getTY(Limelight);
   }
 
-  public NetworkTableEntry getTa() {
-    return ta;
+  public double getTa() {
+    return LimelightHelpers.getTA(Limelight);
   }
 
+  public double getXDistance(){
+    return LimelightHelpers.getCameraPose3d_RobotSpace(Limelight).getX();
+
+  }
+  public double getZDistance(){
+    return LimelightHelpers.getCameraPose3d_RobotSpace(Limelight).getZ();
+    
+  }
   public void setPipeline(int pipe){
-
-table.getEntry("pipeline").setNumber(pipe);
-
-
-
+    LimelightHelpers.setPipelineIndex(Limelight, pipe);
   }
 
   public int getID(){
-    return (int) this.tid.getInteger(0);
+    return (int) LimelightHelpers.getFiducialID(Limelight);
   }
 
-  public double getTxAngleRadians() {
-    return Units.degreesToRadians(tx.getDouble(0));
+  public double getDistanceToTarget(){
+    double x = LimelightHelpers.getCameraPose3d_TargetSpace(Limelight).getX();
+    double y = LimelightHelpers.getCameraPose3d_TargetSpace(Limelight).getZ();
+    return Math.sqrt(Math.pow(x, 2) + Math.pow(y, 2));
   }
 
-  public double getTargetAngleRadians() {
-    return getTxAngleRadians();
-  }
   public boolean hasTarget(){
-    return tv.getDouble(0) != 0;
+    return LimelightHelpers.getTV(Limelight);
   }
+
+  public double getTxAngleRadians(){
+    return Units.degreesToRadians(getTx());
+  }
+
+  public int getTargetAprilTagID(){
+    RawFiducial[] temp =  LimelightHelpers.getRawFiducials(Limelight);
+    int id = -1;
+    for (RawFiducial fiducial : temp) {
+
+      id = fiducial.id;
+      break;
+      //TODO: ADD LOGIC LATER TO GET BEST APRILTAG TX OFFSET WISE
+      // double txnc = fiducial.txnc;             // X offset (no crosshair)
+      // double tync = fiducial.tync;             // Y offset (no crosshair)
+      // double ta = fiducial.ta;                 // Target area
+      // double distToCamera = fiducial.distToCamera;  // Distance to camera
+      // double distToRobot = fiducial.distToRobot;    // Distance to robot
+      // double ambiguity = fiducial.ambiguity;   // Tag pose ambiguity
+  }
+  return id;
+}
+  
+  //TODO: localization stuff
+  public void updatePoseEstimation() {}
+
 }

@@ -1,142 +1,120 @@
+// Copyright (c) FIRST and other WPILib contributors.
+// Open Source Software; you can modify and/or share it under the terms of
+// the WPILib BSD license file in the root directory of this project.
+
 package frc.robot;
 
-import edu.wpi.first.wpilibj2.command.Command;
-import edu.wpi.first.wpilibj2.command.InstantCommand;
-import edu.wpi.first.wpilibj2.command.ParallelCommandGroup;
-import edu.wpi.first.wpilibj2.command.ParallelDeadlineGroup;
-import edu.wpi.first.wpilibj2.command.SequentialCommandGroup;
-import edu.wpi.first.wpilibj2.command.button.JoystickButton;
-import edu.wpi.first.wpilibj2.command.button.POVButton;
-import edu.wpi.first.wpilibj2.command.Subsystem;
-import frc.robot.commands.*;
-import frc.robot.commands.DriveCommands.DoA180;
-import frc.robot.commands.DriveCommands.LockOnAprilTag;
-import frc.robot.commands.DriveCommands.TeleopDrive;
-import frc.robot.constants.CommandConstants;
-import frc.robot.constants.SwerveConstantsYAGSL;
-import frc.robot.subsystems.*;
-import frc.robot.libraries.external.control.Path;
-import frc.robot.libraries.external.control.Trajectory;
-import frc.robot.libraries.external.robot.input.JoystickAxis;
-import frc.robot.state.RobotState;
+import static edu.wpi.first.units.Units.*;
 
-import java.io.File;
+import java.util.concurrent.CopyOnWriteArrayList;
 
-import edu.wpi.first.math.MathUtil;
-import edu.wpi.first.networktables.NetworkTableInstance;
-import edu.wpi.first.wpilibj.DriverStation;
-import edu.wpi.first.wpilibj.Filesystem;
-import edu.wpi.first.wpilibj.Joystick;
-import edu.wpi.first.wpilibj.RobotController;
-import edu.wpi.first.wpilibj.XboxController;
+import com.ctre.phoenix6.swerve.SwerveModule.DriveRequestType;
+import com.ctre.phoenix6.swerve.SwerveRequest;
+import com.pathplanner.lib.auto.AutoBuilder;
+
 import edu.wpi.first.wpilibj.smartdashboard.SendableChooser;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.first.wpilibj2.command.Command;
+import edu.wpi.first.wpilibj2.command.InstantCommand;
+import edu.wpi.first.wpilibj2.command.RunCommand;
+import edu.wpi.first.wpilibj2.command.button.CommandXboxController;
 
+import frc.robot.subsystems.StateManager;
+import frc.robot.subsystems.StateManager.States;
+import frc.robot.subsystems.LimelightSubsystem;
+import frc.robot.commands.BasicCommands.RequestStateChange;
+
+import frc.robot.commands.DefaultCommands.DefaultExampleCommand;
+import frc.robot.commands.DriveCommands.DriveRobotCentric;
+import frc.robot.commands.DriveCommands.DriveToLimeLightVisionOffset;
+import frc.robot.commands.DriveCommands.DriveToTargetOffset;
+import frc.robot.commands.DriveCommands.DriveToTargetOffsetLL3;
+import frc.robot.commands.DriveCommands.LockOnAprilTag;
+import frc.robot.commands.DriveCommands.TrackObject;
+import frc.robot.commands.DriveCommands.TurnToAngle;
+import frc.robot.constants.CommandConstants;
+import frc.robot.generated.TunerConstants;
+import frc.robot.state.IDLE;
+import frc.robot.subsystems.CommandSwerveDrivetrain;
 
 public class RobotContainer {
+    private double MaxSpeed = TunerConstants.kSpeedAt12Volts.in(MetersPerSecond); // kSpeedAt12Volts desired top speed
+    private double MaxAngularRate = RotationsPerSecond.of(0.75).in(RadiansPerSecond); // 3/4 of a rotation per second max angular velocity
+
+    /* Setting up bindings for necessary control of the swerve drive platform */
+    private final SwerveRequest.FieldCentric drive = new SwerveRequest.FieldCentric()
+            .withDeadband(MaxSpeed * 0.06).withRotationalDeadband(MaxAngularRate * 0.05) // Add a 10% deadband
+            .withDriveRequestType(DriveRequestType.OpenLoopVoltage); // Use open-loop control for drive motors
+
+    private final SwerveRequest.RobotCentric robotCentricDrive = new SwerveRequest.RobotCentric().withDeadband(MaxSpeed * 0.1).withRotationalDeadband(MaxAngularRate * 0.025).withDriveRequestType(DriveRequestType.OpenLoopVoltage).withDriveRequestType(DriveRequestType.OpenLoopVoltage);
+    private final SwerveRequest.SwerveDriveBrake brake = new SwerveRequest.SwerveDriveBrake();
+    private final SwerveRequest.PointWheelsAt point = new SwerveRequest.PointWheelsAt();
+
+    private final Telemetry logger = new Telemetry(MaxSpeed);
+
+    private final CommandXboxController pilot = new CommandXboxController(0);
+    private final CommandXboxController copilot = new CommandXboxController(1);
+
+    public final CommandSwerveDrivetrain drivetrain = TunerConstants.createDrivetrain();
+
+    private final StateManager stateManager = new StateManager();
     
-    private final Joystick driver = new Joystick(0);
-    private final Joystick secondaryController = new Joystick(1); 
-
-    /* Drive Controls */
-
-    private final int translationAxis = XboxController.Axis.kLeftY.value;
-    private final int strafeAxis = XboxController.Axis.kLeftX.value;
-    private final int rotationAxis = XboxController.Axis.kRightX.value;
-
-    /* Driver Buttons */
-
-    private final JoystickButton zeroGyro = new JoystickButton(driver, XboxController.Button.kY.value);
-    private final JoystickButton robotCentric = new JoystickButton(driver, XboxController.Button.kRightBumper.value);
-    private final JoystickAxis LeftTrigger = new JoystickAxis(driver, XboxController.Axis.kLeftTrigger.value);
-    private final JoystickButton FLIPURSELF = new JoystickButton(driver, XboxController.Button.kX.value);
-
-    private final JoystickButton SpeakerLimelight = new JoystickButton(driver, XboxController.Button.kA.value);
-    private final JoystickButton RingLimelight = new JoystickButton(driver, XboxController.Button.kB.value);
-
-    /* CoPilot Buttons */
-
-    /* Subsystems */
-
-    public RobotState robotState = new RobotState(driver);
-
-    private  SendableChooser<Command> autoChooser;
-    //private final Music THEMUSIC = new Music();
-    private final Superstructure superstructure = new Superstructure();
+    //subsystems
     
-    private final Blinkin blinky = new Blinkin();
+    //limelights
+    private final LimelightSubsystem limelight = new LimelightSubsystem("limelight");
+    
+    //factories
+    private final CommandFactory commandFactory = new CommandFactory(pilot, drivetrain, stateManager);
+    private final AutonomousCommandFactory autoFactory = new AutonomousCommandFactory(pilot, drivetrain, stateManager);
 
-    private final SwerveSubsystem s_Swerve = new SwerveSubsystem(new File(Filesystem.getDeployDirectory(), "swerve/falcon"));
-    // Limelights
-    // limelight 3 is front intake
-    // limelight 2 is back shooter
-    // 4,7,15,16,14,12,11,13,6,5 - april id tags that limelight 2 should see
-    private LimelightSubsystem limelight3 = new LimelightSubsystem("limelight-three", 1,s_Swerve);
-    private LimelightSubsystem limelight2 = new LimelightSubsystem("limelight-two",0,s_Swerve);
-
-    private Trajectory[] trajectories;
+    private final SendableChooser<Command> chooser ;
 
     public RobotContainer() {
+        stateManager.requestNewState(States.IDLE);
+        chooser = AutoBuilder.buildAutoChooser("Autonomous");
+        SmartDashboard.putData("Autos", chooser);
+        configureBindings();
+    }
 
-        // teleop drive for yagsl
-    limelight3.setPipeline(1);
+    private void configureBindings() {
+        // Note that X is defined as forward according to WPILib convention,
+        // and Y is defined as to the left according to WPILib convention.
+        drivetrain.setDefaultCommand(
+            // Drivetrain will execute this command periodically
+            drivetrain.applyRequest(() ->
+                drive.withVelocityX(-pilot.getLeftY() * MaxSpeed) // Drive forward with negative Y (forward)
+                    .withVelocityY(-pilot.getLeftX() * MaxSpeed) // Drive left with negative X (left)
+                    .withRotationalRate(-pilot.getRightX() * MaxAngularRate) // Drive counterclockwise with negative X (left)
+            )
+        );
 
-        s_Swerve.setDefaultCommand(
-                new TeleopDrive(
-                        s_Swerve,
-                        () -> -driver.getRawAxis(translationAxis),
-                        () -> -driver.getRawAxis(strafeAxis),
-                        () -> -driver.getRawAxis(rotationAxis),
-                        () -> !robotCentric.getAsBoolean()));
+        // Default Commands
+        //elevator.setDefaultCommand(new DefaultElevatorCommand(elevator, stateManager));
 
-        configAutoCommands();
-        configurePilotButtonBindings();
-        configureCoPilotButtonBindings();
+        configureMainBindings();
 
-        // autoChooser =  AutoBuilder.buildAutoChooser();
-        SmartDashboard.putData(autoChooser);
+        drivetrain.registerTelemetry(logger::telemeterize);
+    }
+
+    private void configureMainBindings() {
+        // Drive Controls
+        pilot.y().onTrue(drivetrain.runOnce(() -> drivetrain.seedFieldCentric()));
+        pilot.start().onTrue(new RequestStateChange(States.IDLE, stateManager));
+        copilot.leftTrigger(.7).whileTrue(drivetrain.applyRequest(()->brake));
+        pilot.b().whileTrue(new DriveRobotCentric(drivetrain, pilot));
+
+        // Subsystem Controls
+        
+        // Limelight Controls
         
     }
 
-    private void configurePilotButtonBindings() {
-        //y
-        zeroGyro.onTrue(new InstantCommand(() -> s_Swerve.zeroGyro()));
-        //a
-        FLIPURSELF.whileTrue(new DoA180(s_Swerve, driver, true));
-    }
-
-    private void configureCoPilotButtonBindings() {
-        
-    }
-
-    public void configAutoCommands() {
-        
+    public void changePipeline() {
+        limelight.setPipeline(1);
     }
 
     public Command getAutonomousCommand() {
-        return autoChooser.getSelected();
-    }
-
-    public SwerveSubsystem getDrivetrainSubsystem(){
-     return s_Swerve;
-     }
-    public double getPercentFromBattery(double speed){
-        return speed * 12 / RobotController.getBatteryVoltage();
-    }
-
-    public Superstructure getSuperstructure() {
-        return superstructure;
-    }
-
-    public Joystick getsecondaryController() {
-        return secondaryController;
-    }
-
-    public Joystick getPrimaryController() {
-        return driver;
-    }
-
-    public Trajectory[] getTrajectories() {
-        return trajectories;
+        return chooser.getSelected();
     }
 }

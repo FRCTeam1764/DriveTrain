@@ -19,18 +19,32 @@ import frc.robot.subsystems.CommandSwerveDrivetrain;
 import frc.robot.subsystems.LimelightSubsystem;
 
 
-public class DriveToTarget extends Command {
+public class DriveToTargetOffsetLL3 extends Command {
   private LimelightSubsystem m_Limelight;
   private CommandSwerveDrivetrain m_Drivetrain;
   private Integer m_pipeline;
-  private PIDController thetaController = new PIDController(CommandConstants.kP, CommandConstants.kI, CommandConstants.kD);
+  private PIDController xController = new PIDController(0.0075, 0.00001, 0.0008);//.0045);
+  private PIDController yController = new PIDController(0.035, 0.00001, 0.00002);
+  private double targetx;
+  private double targety;
+
   private boolean targeting = false;
-  public DriveToTarget(CommandSwerveDrivetrain drivetrain, LimelightSubsystem Limelight, int pipeline) {
+  private double offset;
+  public DriveToTargetOffsetLL3(CommandSwerveDrivetrain drivetrain, LimelightSubsystem Limelight, double offset, int pipeline, double targetx, double targety) {
     addRequirements(drivetrain);
     m_Drivetrain = drivetrain;
     m_Limelight = Limelight;
     m_pipeline = pipeline;
+    this.targetx = targetx;
+    this.targety=targety;
+    xController.setSetpoint(targetx);
+    yController.setSetpoint(targety);
+    this.offset = offset;
+    SmartDashboard.putBoolean("TARGET", false);
+    SmartDashboard.putBoolean("Aligned", false);
   }
+
+
 
   private final SwerveRequest.RobotCentric drive = new SwerveRequest.RobotCentric()
     .withDriveRequestType(DriveRequestType.OpenLoopVoltage);
@@ -43,42 +57,53 @@ public class DriveToTarget extends Command {
 
     m_Limelight.setPipeline(m_pipeline);
     targeting = false;
-    thetaController.reset();
-    thetaController.setTolerance(1);
+    xController.reset();
+    xController.setTolerance(1);
+    yController.reset();
+    yController.setTolerance(1);
   }
 
   // Called every time the scheduler runs while the command is scheduled.
   @Override
   public void execute() {
-    SmartDashboard.putBoolean("DriveToLLTarget running", true);
-    double thetaOutput = 0;
-    double xOutput = 0;
+    double xSpeed = 0;
+    double ySpeed = 0;
 		if (m_Limelight.hasTarget()){
-			double vertical_angle = m_Limelight.getVerticalAngleOfErrorDegrees();
-			double horizontal_angle = -m_Limelight.getHorizontalAngleOfErrorDegrees() ;
-			double setpoint = Math.toRadians(horizontal_angle)+ m_Drivetrain.getPose().getRotation().getRadians();
-      thetaController.setSetpoint(setpoint);
-      targeting = true;
-		
-			thetaOutput = thetaController.calculate(m_Drivetrain.getPose().getRotation().getRadians(), setpoint);
+			double z_distance = m_Limelight.getTa(); //THIS IS IN TERMS OF CAMERA WATCHOUT
+			double x_distance = m_Limelight.getTx();
+			 xSpeed = xController.calculate(x_distance, targetx);
+       ySpeed = yController.calculate(z_distance, targety);
+       SmartDashboard.putNumber("Alimelight", ySpeed);
+       SmartDashboard.putNumber("Xlimelight", xSpeed);
+
+
       //xOutput = -m_throttle.get()*DrivetrainConstants.maxSpeedMetersPerSecond;
-		
-      SmartDashboard.putNumber("targeting error", horizontal_angle);
-		} 
+		SmartDashboard.putBoolean("TARGET", true);
+		}else{
+      SmartDashboard.putBoolean("TARGET", false);
+
+    }
+
+    if (Math.abs(m_Limelight.getTa()-targety) <= 0.4 && Math.abs(m_Limelight.getTx()-targetx)<=0.25) {
+      SmartDashboard.putBoolean("Aligned", true);
+    } else {
+      SmartDashboard.putBoolean("Aligned", false);
+    }
     
-    m_Drivetrain.setControl(drive.withVelocityX(0).withRotationalRate(thetaOutput));
+    m_Drivetrain.setControl(drive.withVelocityX(ySpeed*(CommandConstants.MaxSpeed/2)).withVelocityY(xSpeed*(CommandConstants.MaxSpeed/2)).withRotationalRate(0));
   }
 
   // Called once the command ends or is interrupted.
   @Override
   public void end(boolean interrupted) {
-    SmartDashboard.putBoolean("DriveToLLTarget running", true);
     m_Drivetrain.setControl(drive.withVelocityX(0).withVelocityY(0).withRotationalRate(0));
   }
 
   // Returns true when the command should end.
   @Override
   public boolean isFinished() {
-    return false;
+   
+    return false; //TODO: FINISH CHECKINHG
+    //return Math.abs(m_Limelight.getTa()-targety) <= 0.4 && Math.abs(m_Limelight.getTx()-targetx)<=0.25;
   }
 }
